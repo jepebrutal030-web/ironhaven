@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="IRONHAVEN — an original open-world crime game in the spirit of GTA 6. Explore a sun-soaked port city on foot and by car, steal cars, dodge the IHPD, and run five story missions.">
+<title>IRONHAVEN — Open-World Crime</title>
+<link rel="icon" href="./favicon.png">
+<style>
+  :root {
+    --ink: #fff7e8;
+    --muted: #cbb98f;
+    --panel: rgba(16, 14, 10, 0.72);
+    --panel-solid: #171410;
+    --line: rgba(255, 215, 130, 0.35);
+    --gold: #f5b942;
+    --gold-soft: #ffd97a;
+    --red: #ff4d3d;
+    --blue: #4da3ff;
+    --green: #7ddc6a;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e0c09; color: var(--ink); font-family: var(--font-ui); }
+  #app, #app canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(3px); }
+
+  /* top-left status */
+  #status { position: fixed; top: 16px; left: 16px; padding: 12px 14px; min-width: 240px; }
+  #status .row { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+  #health-wrap { flex: 1; height: 12px; background: rgba(255,255,255,0.12); border-radius: 6px; overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5a3d, #ffb03d); transition: width 150ms linear; }
+  #health-num { font-weight: 700; font-size: 13px; min-width: 34px; text-align: right; }
+  #money { font-size: 20px; font-weight: 800; color: var(--gold-soft); letter-spacing: 0.5px; }
+  #money .cur { color: var(--gold); font-size: 15px; margin-right: 2px; }
+  #stars { font-size: 20px; letter-spacing: 3px; line-height: 1; }
+  #stars .st { color: rgba(255,255,255,0.22); }
+  #stars .st.on { color: var(--gold); text-shadow: 0 0 8px rgba(245,185,66,0.9); }
+  #wanted-label { font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+
+  /* top-right minimap */
+  #map-wrap { position: fixed; top: 16px; right: 16px; padding: 8px; }
+  #minimap { display: block; width: 200px; height: 200px; border-radius: 6px; }
+  #map-label { text-align: center; font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 5px; text-transform: uppercase; }
+
+  /* mission objective, bottom-left */
+  #objective { position: fixed; left: 16px; bottom: 16px; padding: 12px 16px; max-width: 380px; }
+  #obj-title { font-size: 12px; letter-spacing: 2px; color: var(--gold); text-transform: uppercase; font-weight: 700; }
+  #obj-text { font-size: 16px; font-weight: 600; margin-top: 4px; line-height: 1.35; }
+  #obj-dist { font-size: 13px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  #obj-timer { font-size: 18px; font-weight: 800; color: var(--red); margin-top: 4px; display: none; font-variant-numeric: tabular-nums; }
+
+  /* bottom-right speed / ammo */
+  #drive { position: fixed; right: 16px; bottom: 16px; padding: 10px 16px; text-align: right; display: none; }
+  #speed { font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  #speed small { font-size: 13px; color: var(--muted); font-weight: 600; }
+  #car-name { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 3px; }
+  #car-health-wrap { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+  #car-health-fill { height: 100%; width: 100%; background: var(--blue); transition: width 150ms linear; }
+  #ammo { position: fixed; right: 16px; bottom: 16px; padding: 10px 16px; text-align: right; display: none; }
+  #ammo-num { font-size: 28px; font-weight: 800; }
+  #ammo-num small { font-size: 13px; color: var(--muted); }
+
+  /* center prompt + toast */
+  #prompt { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 9px 18px; font-size: 15px; font-weight: 700; display: none; white-space: nowrap; }
+  #prompt b { color: var(--gold-soft); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; margin-right: 8px; background: rgba(0,0,0,0.35); }
+  #toast { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); padding: 12px 22px; font-size: 17px; font-weight: 700; text-align: center; opacity: 0; transition: opacity 250ms linear; max-width: 70%; line-height: 1.4; }
+  #toast.show { opacity: 1; }
+  #toast .sub { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+
+  /* crosshair */
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 24px; height: 24px; transform: translate(-50%, -50%); display: none; }
+  #crosshair i { position: absolute; background: var(--ink); opacity: 0.95; box-shadow: 0 0 3px rgba(0,0,0,0.9); }
+  #crosshair i:nth-child(1) { left: 11px; top: 0; width: 2px; height: 7px; }
+  #crosshair i:nth-child(2) { left: 11px; bottom: 0; width: 2px; height: 7px; }
+  #crosshair i:nth-child(3) { top: 11px; left: 0; height: 2px; width: 7px; }
+  #crosshair i:nth-child(4) { top: 11px; right: 0; height: 2px; width: 7px; }
+  #crosshair .dot { position: absolute; left: 11px; top: 11px; width: 2px; height: 2px; background: var(--ink); }
+  #hitmarker { position: fixed; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%) rotate(45deg); opacity: 0; transition: opacity 90ms linear; }
+  #hitmarker.on { opacity: 1; }
+  #hitmarker i { position: absolute; background: var(--gold); }
+  #hitmarker i:nth-child(1) { left: 14px; top: 0; width: 2px; height: 9px; }
+  #hitmarker i:nth-child(2) { left: 14px; bottom: 0; width: 2px; height: 9px; }
+  #hitmarker i:nth-child(3) { top: 14px; left: 0; height: 2px; width: 9px; }
+  #hitmarker i:nth-child(4) { top: 14px; right: 0; height: 2px; width: 9px; }
+
+  #damage { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 52%, rgba(255, 40, 20, 0.5) 100%); transition: opacity 120ms linear; }
+  #damage.on { opacity: 1; }
+  #wanted-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 60%, rgba(70, 120, 255, 0.28) 100%); }
+
+  /* full screens */
+  .screen { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(10,8,6,0.55) 0%, rgba(10,8,6,0.82) 100%); }
+  .screen.hidden { display: none; }
+  .card { max-width: 640px; width: calc(100% - 40px); padding: 34px 40px; text-align: center; }
+  .card h1 { font-family: var(--font-display); font-size: 58px; margin: 0; letter-spacing: 6px; color: var(--gold-soft); text-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 34px rgba(245,185,66,0.45); }
+  .card h1 .thin { color: var(--ink); font-weight: 400; }
+  .card h2 { font-size: 15px; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; margin: 6px 0 0; font-weight: 600; }
+  .card p.story { font-size: 15px; line-height: 1.65; color: #e9dcc0; margin: 20px 0; text-align: left; }
+  .card .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; text-align: left; font-size: 13.5px; color: var(--muted); margin: 16px 0 22px; }
+  .card .controls b { color: var(--ink); display: inline-block; min-width: 86px; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 6px; padding: 13px 30px; font-size: 16px; font-weight: 800; letter-spacing: 1px; color: #1a1206; background: linear-gradient(180deg, var(--gold-soft), var(--gold)); border: none; border-radius: 9px; box-shadow: 0 4px 0 rgba(0,0,0,0.4); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.4); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+  .btn:disabled { opacity: 0.35; cursor: default; filter: none; }
+  .big { font-size: 64px; font-weight: 900; letter-spacing: 8px; margin: 0; }
+  .big.red { color: var(--red); text-shadow: 0 0 30px rgba(255,77,61,0.5); }
+  .big.blue { color: var(--blue); text-shadow: 0 0 30px rgba(77,163,255,0.5); }
+  .big.gold { color: var(--gold-soft); text-shadow: 0 0 30px rgba(245,185,66,0.5); }
+  .stats { display: flex; justify-content: center; gap: 34px; margin: 18px 0; }
+  .stats div { text-align: center; }
+  .stats .v { font-size: 26px; font-weight: 800; color: var(--gold-soft); }
+  .stats .k { font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  #mission-list { text-align: left; margin: 14px auto 6px; max-width: 460px; font-size: 14px; line-height: 1.9; color: #e9dcc0; }
+  #mission-list .done { color: var(--green); }
+  #mission-list .cur { color: var(--gold-soft); font-weight: 700; }
+  .tiny { font-size: 12px; color: var(--muted); margin-top: 18px; line-height: 1.5; }
+  @media (max-width: 760px) { .card h1 { font-size: 40px; } #minimap { width: 140px; height: 140px; } #status { min-width: 190px; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div id="status" class="panel">
+    <div class="row"><div id="health-wrap"><div id="health-fill"></div></div><div id="health-num">100</div></div>
+    <div class="row"><div id="money"><span class="cur">$</span><span id="money-num">0</span></div></div>
+    <div class="row"><div id="stars"><span class="st">★</span><span class="st">★</span><span class="st">★</span><span class="st">★</span><span class="st">★</span></div><div id="wanted-label">IHPD</div></div>
+  </div>
+  <div id="map-wrap" class="panel"><canvas id="minimap" width="200" height="200"></canvas><div id="map-label">Ironhaven</div></div>
+  <div id="objective" class="panel">
+    <div id="obj-title">Mission</div>
+    <div id="obj-text">Welcome to Ironhaven.</div>
+    <div id="obj-dist"></div>
+    <div id="obj-timer"></div>
+  </div>
+  <div id="drive" class="panel"><div id="speed">0 <small>mph</small></div><div id="car-name"></div><div id="car-health-wrap"><div id="car-health-fill"></div></div></div>
+  <div id="ammo" class="panel"><div id="ammo-num">12 <small>/ ∞</small></div><div style="font-size:12px;color:var(--muted)">PISTOL — R reload</div></div>
+  <div id="prompt" class="panel"></div>
+  <div id="toast" class="panel"></div>
+  <div id="crosshair"><i></i><i></i><i></i><i></i><span class="dot"></span></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="damage"></div>
+  <div id="wanted-flash"></div>
+</div>
+
+<div id="screen-start" class="screen">
+  <div class="card panel">
+    <h1>IRON<span class="thin">HAVEN</span></h1>
+    <h2>Streets of the Sun Coast &middot; an open-world crime story</h2>
+    <p class="story">Five years ago Dario Reyes left Ironhaven with nothing but a stolen car and a promise. Now he is back — broke, wanted, and owed one last job by the woman who runs this city from the shadows. Steal cars, outrun the IHPD, and run five missions from a hot homecoming to the Harbor Job that will either make him a legend or put him in the ground.</p>
+    <div class="controls">
+      <div><b>W A S D</b> move / drive</div><div><b>Mouse</b> look &amp; aim (click to lock)</div>
+      <div><b>Shift</b> sprint / boost</div><div><b>Left click</b> shoot &nbsp; <b>R</b> reload</div>
+      <div><b>E</b> enter / exit car</div><div><b>Space</b> handbrake (car) / jump</div>
+      <div><b>P</b> pause &amp; save</div><div><b>M</b> mute music</div>
+    </div>
+    <button class="btn" id="btn-new">NEW GAME</button>
+    <button class="btn ghost" id="btn-continue">CONTINUE</button>
+    <div class="tiny">An original game. Its city, characters, vehicles, names, story, art, sound and music are all its own — nothing from Rockstar Games. Runs entirely from static files; no network requests. Progress saves to this browser.</div>
+  </div>
+</div>
+
+<div id="screen-pause" class="screen hidden">
+  <div class="card panel">
+    <h1 style="font-size:38px">PAUSED</h1>
+    <div id="mission-list"></div>
+    <button class="btn" id="btn-resume">RESUME</button>
+    <button class="btn ghost" id="btn-save">SAVE GAME</button>
+    <button class="btn ghost" id="btn-restart-mission">RESTART MISSION</button>
+    <button class="btn ghost" id="btn-quit">QUIT TO TITLE</button>
+    <div class="tiny" id="save-note"></div>
+  </div>
+</div>
+
+<div id="screen-busted" class="screen hidden">
+  <div class="card panel">
+    <p class="big blue">BUSTED</p>
+    <p class="story" style="text-align:center">The IHPD finally boxed you in. You did the time — or at least, you paid the fine.</p>
+    <div class="stats"><div><div class="v" id="busted-fine">$200</div><div class="k">Fine paid</div></div></div>
+    <button class="btn" id="btn-busted">BACK ON THE STREETS</button>
+  </div>
+</div>
+
+<div id="screen-wasted" class="screen hidden">
+  <div class="card panel">
+    <p class="big red">WASTED</p>
+    <p class="story" style="text-align:center">Ironhaven chewed you up. The docs at Mercy General patched you up — for a price.</p>
+    <div class="stats"><div><div class="v" id="wasted-fine">$200</div><div class="k">Hospital bill</div></div></div>
+    <button class="btn" id="btn-wasted">BACK ON THE STREETS</button>
+  </div>
+</div>
+
+<div id="screen-complete" class="screen hidden">
+  <div class="card panel">
+    <p class="big gold">LEGEND OF IRONHAVEN</p>
+    <p class="story" style="text-align:center">The golden Vulture is in the container yard, the IHPD is still looking for a ghost, and Mara Voss is already counting the money. Dario Reyes didn't just come home — he took the city.</p>
+    <div class="stats">
+      <div><div class="v" id="end-money">$0</div><div class="k">Earned</div></div>
+      <div><div class="v" id="end-time">0:00</div><div class="k">Play time</div></div>
+      <div><div class="v" id="end-kills">0</div><div class="k">Taken down</div></div>
+    </div>
+    <button class="btn" id="btn-freeroam">KEEP PLAYING (FREE ROAM)</button>
+    <button class="btn ghost" id="btn-again">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
